@@ -30,8 +30,8 @@ private:
   const int8_t verde1Pin;
   const int8_t amarelo1Pin;
   const int8_t vermelho2Pin;
-  const int8_t verde2Pin; // Sinal Amarelo/Aviso (Pedestre)
-  const int8_t amarelo2Pin; // Sinal Verde (Pedestre)
+  const int8_t verde2Pin;
+  const int8_t amarelo2Pin;
   const int8_t ldr;
   int ultimoTempo1;
   int ultimoTempo2;
@@ -46,8 +46,8 @@ private:
 
   void setLuz2(int V, int A, int G, int tempoAtual) {
     digitalWrite(vermelho2Pin, V);
-    digitalWrite(verde2Pin, A); // Usa verde2Pin para Amarelo/Aviso
-    digitalWrite(amarelo2Pin, G); // Usa amarelo2Pin para Verde
+    digitalWrite(verde2Pin, A);
+    digitalWrite(amarelo2Pin, G);
     ultimoTempo2 = tempoAtual;
   }
   
@@ -55,6 +55,7 @@ private:
     if (tempoAtual - tempoPisca >= TEMPO_AMARELO_NOITE) {
       bool estado = digitalRead(amarelo1Pin) == LOW;
       
+      // Desliga todas as luzes diretamente (código compactado)
       digitalWrite(vermelho1Pin, LOW);
       digitalWrite(verde1Pin, LOW);
       digitalWrite(amarelo1Pin, LOW);
@@ -181,7 +182,6 @@ void setup() {
 void loop() {
   rodar.update();
 }
-
 ```
 
 
