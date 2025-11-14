@@ -629,26 +629,122 @@ void loop() {
 - **Pinos Globais**: Define os pinos para o sensor ultrassônico (`TRIG_PIN`, `ECHO_PIN`) e o sensor LDR.
 - **Limiares**: `LIMIAR_NOITE` para ativar modo noturno, e `LIMIAR_DISTANCIA` para detectar objetos próximos (ex: pedestres ou veículos).
 
-## 2. Leitura do Sensor Ultrassônico
+```
+// Definições de Pinos e Constantes
+// **********************************
+const int8_t TRIG_PIN = 32; // Pino TRIG do sensor ultrassônico
+const int8_t ECHO_PIN = 34; // Pino ECHO do sensor ultrassônico
 
+#define LIMIAR_NOITE 500       // Valor LDR abaixo do qual é considerado "noite"
+#define LIMIAR_DISTANCIA 30    // Distância em cm para detecção de veículo/pedestre
+#define TEMPO_AMARELO_NOITE 500 // 0.5 segundos para piscar no modo noturno
+
+// Função para ler a distância do sensor ultrassônico
+long readDistance() {
+
+  // Envia um pulso curto no TRIG
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+  
+  // Recebe a duração do pulso de ECHO
+  long duracao = pulseIn(ECHO_PIN, HIGH);
+  
+  // Converte o tempo de duração em distância (cm)
+  long distancia = duracao * 0.0343 / 2; 
+  return distancia;
+}
+```
+####  Bloco 1:
+
+= Pinos Globais: Os pinos do Sensor Ultrassônico (TRIG_PIN e ECHO_PIN) foram definidos globalmente porque o construtor da sua classe original não permitia a adição de mais parâmetros.
+
+Limiares de Decisão (#define):
+
+LIMIAR_NOITE: Define o valor de luz (leitura do LDR) que aciona o Modo Noturno.
+
+LIMIAR_DISTANCIA: Define a distância (30 cm) que indica a presença de algo, acionando a prioridade na via secundária.
+
+Função readDistance(): Essa função implementa o protocolo para medir a distância: envia um sinal de ultrassom (pulso no TRIG) e mede quanto tempo leva para o sinal retornar (no ECHO). O resultado é convertido para centímetros.
+
+
+## Classe Semaforo e Funções Auxiliares.
+```
+// Classe responsável por monitorar o sensor piezo e exibir no LCD (Nota: Piezo foi substituído por Ultrassônico)
+
+class Semaforo {
+private:
+  const int8_t vermelho1Pin; // ... (definição de todos os pinos de LEDs e LDR)
+  const int8_t ldr;
+  int ultimoTempo1; // Variável de controle do tempo semáforo 1 
+  int ultimoTempo2; // Variável de controle do tempo semáforo 2
+  
+  // ADICIONEI UMA VARIÁVEL PARA CONTROLE DO PISCA-PISCA NOTURNO
+  unsigned long tempoPisca;
+
+  // ADICIONEI UMA FUNÇÃO AUXILIAR PARA O MODO NOTURNO
+  void setTrafficLightYellowBlinking(unsigned long tempoAtual) {
+    if (tempoAtual - tempoPisca >= TEMPO_AMARELO_NOITE) {
+      // Inverte o estado de todos os amarelos
+      bool estado = digitalRead(amarelo1Pin) == LOW; 
+      
+      // Desliga todas as luzes antes de acender o amarelo
+      // (códigos omitted para brevidade, mas o objetivo é apagar tudo)
+
+      // Liga os amarelos
+      digitalWrite(amarelo1Pin, estado ? HIGH : LOW);
+      digitalWrite(verde2Pin, estado ? HIGH : LOW); // Usa o pino 'verde2' como amarelo do semáforo 2
+      
+      tempoPisca = tempoAtual; // Atualiza o tempo do último pisca
+    }
+  }
+
+public:
+  // Construtor: Inicializa os pinos com os valores passados na instância
+  Semaforo(int8_t v1, int8_t g1, int8_t a1, int8_t v2, int8_t g2, int8_t a2, int8_t ldr) : 
+    vermelho1Pin(v1), verde1Pin(g1), amarelo1Pin(a1), 
+    vermelho2Pin(v2), verde2Pin(g2), amarelo2Pin(a2), ldr(ldr) {}
+  
+  // ... (função begin() abaixo)
+  // ... (função update() abaixo)
+};
+
+``` 
+#### Explicação do Bloco 2:
+Variável tempoPisca: Uma variável crucial adicionada para implementar o Modo Noturno. Ela rastreia o último momento em que os LEDs amarelos piscaram.
+
+Função setTrafficLightYellowBlinking(): Esta função é chamada quando o LDR detecta que é noite. Ela usa tempoPisca para garantir que o LED mude de estado (ligar/desligar) a cada 500ms (TEMPO_AMARELO_NOITE), criando o efeito intermitente sem usar o delay().
+
+## 3. Classe Semaforo (Controle) 
+##### Função begin() (Configuração de Pinos)
 
 ```
-long readDistance() {
-// Envia pulso ultrassônico e mede duração
-digitalWrite(TRIG_PIN, LOW);
-delayMicroseconds(2);
-digitalWrite(TRIG_PIN, HIGH);
-delayMicroseconds(10);
-digitalWrite(TRIG_PIN, LOW);
-long duracao = pulseIn(ECHO_PIN, HIGH);
-long distancia = duracao * 0.0343 / 2;
-return distancia;
+void begin() {
+  Serial.begin(115200); 
+  // Configuração de todos os pinos de LEDs como OUTPUT
+  // ...
+  
+  // ADICIONEI A CONFIGURAÇÃO DOS PINOS DO ULTRASSÔNICO
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+
+  // Estado inicial: Semáforo 1 (Avenida) em Vermelho, Semáforo 2 (Rua) em Verde (ou Amarelo/Vermelho, dependendo da sua fiação)
+  digitalWrite(vermelho1Pin, HIGH);
+  digitalWrite(verde2Pin, HIGH); 
+  
+  ultimoTempo1 = 0;
+  ultimoTempo2 = 0;
+  tempoPisca = millis(); // Inicializa o contador do pisca-pisca
 }
 ```
 
-*Essa função mede a distância ao objeto na frente do sensor.*  
+#### Explicação do Bloco 3:
+- Configura todos os pinos de LEDs e, fundamentalmente, os pinos globais do Ultrassônico (TRIG_PIN e ECHO_PIN).
 
-## 3. Classe Semaforo (Controle)
+- Define o estado inicial dos semáforos, preparando o sistema para o ciclo de tráfego.
+
 - **Atributos Privados**: Pinos dos LEDs, variáveis de controle de tempo (`ultimoTempo1`, `ultimoTempo2`, `tempoPisca`).  
 
 - **Método `begin()`**: Configura os pinos como saída e define o estado inicial (semáforo de carro: vermelho, semáforo de pedestre: verde).  
@@ -660,14 +756,91 @@ return distancia;
   - **Controle de Semáforo No Dia**: Usa o valor da distância do sensor ultrassônico para detectar pedestres ou veículos na via secundária.
 
   - **Transições**:
-    - **Carro (Semáforo 1)**: Verde para amarelo após 4 segundos, amarelo para vermelho após 2 segundos, e então o ciclo se reinicia com o vermelho.
-    - **Pedestre (Semáforo 2)**: Verde para amarelo após 2 segundos, amarelo para vermelho após 2 segundos, vermelho para verde baseado na detecção de presença.
 
-## 4. Controle de Tempo sem delay()
-- Uso de `millis()` para evitar bloqueios na execução do programa, garantindo controle assíncrono e responsivo.
+  - **Carro (Semáforo 1)**: Verde para amarelo após 4 segundos, amarelo para vermelho após 2 segundos, e então o ciclo se reinicia com o vermelho.
+    
+  - **Pedestre (Semáforo 2)**: Verde para amarelo após 2 segundos, amarelo para vermelho após 2 segundos, vermelho para verde baseado na detecção de presença.
 
-## 5. Interação Sensorial
+
+## Função update() (Lógica de Decisão e Prioridade) 
+
+```
+void update() {
+  int tempoAtual = millis();
+  int leituraLDR = analogRead(ldr);
+  long distanciaCM = readDistance();
+  
+  // 1. Lógica do Modo Noturno (Prioridade Máxima)
+  if (leituraLDR < LIMIAR_NOITE) {
+    setTrafficLightYellowBlinking(tempoAtual);
+    delay(10); 
+    return; // Sai daqui! Nenhuma outra lógica de tráfego é executada se for noite.
+  }
+
+  // 2. Lógica Normal (Dia) - INTEGRAÇÃO COM SENSOR DE DISTÂNCIA
+  bool deteccaoRua2 = (distanciaCM <= LIMIAR_DISTANCIA);
+  
+  // Transição 2: Verde1 (Avenida) -> Amarelo1 (Avenida)
+  if (digitalRead(verde1Pin) == HIGH) {
+    if (tempoAtual - ultimoTempo1 > 4000 || (tempoAtual - ultimoTempo1 > 2000 && deteccaoRua2)) { 
+      // MUDANÇA: Passa para Amarelo se passou 4s OU se passou 2s E detectou na Rua (prioridade)
+      digitalWrite(verde1Pin, LOW);
+      digitalWrite(amarelo1Pin, HIGH);
+      ultimoTempo1 = tempoAtual;
+    }
+  }
+
+  // ... Transições 1 e 3 (padrão)
+
+  // Transição 6: Vermelho2 (Rua) -> Verde2 (Rua)
+  if (digitalRead(vermelho2Pin) == HIGH) { 
+    if (digitalRead(vermelho1Pin) == HIGH) { 
+      // SÓ ABRE se a Avenida estiver Vermelha E...
+      if (tempoAtual - ultimoTempo2 >= 4000 || deteccaoRua2) {
+        // ...passou 4s OU se houver detecção na Rua (prioridade)
+        digitalWrite(vermelho2Pin, LOW);
+        digitalWrite(verde2Pin, HIGH);
+        ultimoTempo2 = tempoAtual;
+      }
+    }
+  }
+  // ... (continua com as outras transições de tempo fixo)
+  delay(10); 
+}
+```
+#### Explicação do Bloco 4:
+- Leitura e return: A função lê os sensores. Se a condição noturna for atendida, ela chama a função de pisca e usa o comando return; para sair imediatamente, bloqueando a lógica de tráfego do dia.
+
+- deteccaoRua2 (A Flag de Prioridade): Esta variável booleana rastreia a detecção do ultrassônico.
+
+- Inteligência na Transição 2 (Avenida): O tempo de Verde da Avenida é reduzido (de 4s para 2s) se a deteccaoRua2 for verdadeira. Isso acelera o ciclo quando há tráfego esperando na via secundária.
+
+- Inteligência na Transição 6 (Rua/Pedestre): O Verde da Rua agora só é acionado se houver intertravamento (Avenida Vermelha) e se o tempo tiver esgotado OU se houver detecção de veículo/pedestre. Isso evita que o semáforo da Rua abra desnecessariamente.
+
+## 5. Bloco Principal do Arduino.
+
+```
+// Instância da classe 
+Semaforo rodar(33, 26, 25, 21, 22, 23, 35); 
+
+void setup() {
+  rodar.begin();
+}
+
+void loop() {
+  rodar.update();
+}
+```
+
+#### Explicação do Bloco 5:
+- Semaforo rodar(...): Cria o objeto (rodar) que representa todo o seu sistema. Os números entre parênteses são os pinos do seu microcontrolador (LEDs e LDR).
+
+- setup(): É a função de configuração do Arduino. Chama rodar.begin(), que configura todos os pinos.
+
+- loop(): É a função de execução contínua. Chama rodar.update() repetidamente, mantendo a lógica de leitura de sensores e controle de luzes em funcionamento constante.
+
 - **Sensor de Luminosidade**: Para acionar o modo noturno (`setTrafficLightYellowBlinking()`), normalmente usado ao anoitecer.
+
 - **Sensor Ultrassônico**: Para detectar presença na via secundária, ativando o semáforo de pedestres.
 
 ## 6. Controle de Estado dos Semáforos
@@ -679,6 +852,4 @@ return distancia;
 - Basta incluir a leitura do sensor ultrassônico na lógica do método `update()`, com uma condicional que ajusta os sinais de acordo com a distância detectada.
 - Implementar o modo noturno acionando o `setTrafficLightYellowBlinking()` baseado na leitura do LDR.
 
----
 
-Se desejar, posso ajudar a adaptar seu código incluindo a leitura e uso do sensor ultrassônico para controle do semáforo de pedestres, assim como a lógica de modo noturno. Quer que eu gere essa versão ajustada?
