@@ -1,7 +1,7 @@
 ```
 / Definições de Pinos e Constantes
 
-// **********************************
+
 
 // ADICIONEI ESTES PINOS E CONSTANTES NECESSÁRIAS
 
@@ -51,7 +51,7 @@ long readDistance() {
 
 }
 
-// **********************************
+
 
 
 
